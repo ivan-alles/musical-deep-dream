@@ -2,20 +2,20 @@ from musicnn.extractor import extractor
 
 
 # file_name = 'songs/pop.00000.wav'
-#file_name = 'songs/metal.00000.wav'
-file_name = 'songs/classical.00012.wav'
+file_name = 'songs/metal.00000.wav'
+# file_name = 'songs/classical.00012.wav'
 
 
 model = 'MSD_musicnn'
 # model = 'MSD_vgg'
 
-taggram, tags, features = extractor(file_name, model=model, input_length=0.1)
+taggram, tags, feature_map = extractor(file_name, model=model, input_length=0.1)
 
 # Features with time axis: mean_pool, max_pool, penultimate
 
-print(features.keys())
+print(feature_map.keys())
 
-features = features['max_pool']
+song_features = feature_map['max_pool']
 
 import cv2
 import numpy as np
@@ -43,9 +43,11 @@ def deep_dream(model_path):
     losses = []
     targets = []
     layers = []
+    num_features = 0
     for layer_name in layer_names:
         layer = graph.get_tensor_by_name("import/%s:0" % layer_name)
         layers.append(layer)
+        num_features += layer.shape[-1]
         print(f'Layer {layer_name}, shape {layer.shape}')
         target = tf.placeholder(tf.float32, name="target")
         targets.append(target)
@@ -60,14 +62,16 @@ def deep_dream(model_path):
     gradient = tf.gradients(loss, X)[0]
 
     learning_rate = 2
-    for epoch in range(len(features)):
+    for epoch in range(len(song_features)):
         size = 7
         # image = rng.uniform(imagenet_mean - 5, imagenet_mean + 5, (size, size, 3))
         image = np.full((size, size, 3), imagenet_mean, dtype=np.float32)
 
         target_values = []
-        f = (features[epoch] > 1).astype(np.float32)
-        stride = len(f) // len(layers)
+        features = song_features[epoch]
+        features = cv2.resize(np.tile(features, (11, 1)), (num_features, 11), interpolation=cv2.INTER_LINEAR)[5]
+        features = (features > 0.2).astype(np.float32)
+        start = 0
         for l in range(len(layers)):
             layer = layers[l]
             target_size = int(layer.shape[3])
@@ -77,15 +81,9 @@ def deep_dream(model_path):
             #     t = rng.uniform(10, 100, int(target_size * 0.1))
             #     t = np.hstack((t, np.full(target_size - t.shape[0], 0.00001)))
             #     rng.shuffle(t)
-            t = np.zeros(target_size)
-            if stride > target_size:
-                raise NotImplementedError()
-            t[:stride] = f[stride*l:stride*(l+1)]
-            np.random.RandomState(int(features[epoch].sum())).shuffle(t)
+            t = features[start:start+target_size]
+            start += target_size
             target_values.append(t)
-
-        # for tv in target_values:
-        #     tv *= 0.999
 
         while size < 300:
             l = sess.run(layer, {
