@@ -8,6 +8,7 @@ verify_ssl = true
 [packages]
 tensorflow = "==1.15.5"
 opencv-python = "*"
+librosa = "*"
 
 [requires]
 python_version = "3.6"

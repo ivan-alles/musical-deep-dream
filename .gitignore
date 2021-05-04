@@ -1,4 +1,8 @@
 # Byte-compiled / optimized / DLL files
+
+songs
+musicnn/musicnn
+
 __pycache__/
 *.py[cod]
 *$py.class
