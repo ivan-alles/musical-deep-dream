@@ -7,19 +7,18 @@ import shutil
 import subprocess
 import tensorflow as tf
 
-# AUDIO_FILE = r'songs\pop.00000.wav'
-AUDIO_FILE = r'songs\metal.00000-s.wav'
+AUDIO_FILE = r'songs\pop.00000.wav'
+# AUDIO_FILE = r'songs\metal.00000.wav'
 # AUDIO_FILE = r'songs\classical.00012.wav'
 
 MUSICNN_MODEL = 'MSD_musicnn'
 # MUSICNN_MODEL = 'MSD_vgg'
 
-MUSICNN_INPUT_LENGTH = 0.25
+MUSICNN_INPUT_LENGTH = 1.834 * 2
 
 # Possible values: mean_pool, max_pool, penultimate, taggram
 FEATURE_NAME = 'mean_pool'
 FEATURE_THRESHOLD = 0.1
-
 
 DEEP_DREAM_MODEL = 'inception5h/tensorflow_inception_graph.pb'
 
@@ -28,10 +27,11 @@ LAYER_NAMES = ['mixed3a', 'mixed4a', 'mixed4e', 'mixed5b']
 LAYER_WEIGHTS = [3, 4, 2, 1]
 LEARNING_RATE = 2
 START_IMAGE_SIZE = 8
-MAX_IMAGE_SIZE = 300
-OCTAVE_SCALE = 1.4
+MAX_IMAGE_SIZE = 256
+OCTAVE_SCALE = 2
 ITERATION_COUNT = 5
 MIX_RNG_SEED = 1
+OUTPUT_IMAGE_SIZE = 1024
 
 OUTPUT_DIR = 'output'
 
@@ -40,9 +40,9 @@ GAMMA = 0.9
 configuration.SR = 64000
 configuration.N_MELS = 64
 
+fps = None
 
-def make_keyframes():
-
+def make_frames():
     taggram, tags, feature_map = extractor(AUDIO_FILE, model=MUSICNN_MODEL, input_length=MUSICNN_INPUT_LENGTH)
     print(f'Musicnn features: {feature_map.keys()}')
     feature_map['taggram'] = taggram
@@ -82,10 +82,23 @@ def make_keyframes():
 
     gradient = tf.gradients(loss, X)[0]
 
-    for fi in range(len(song_features)):
-        image_size = START_IMAGE_SIZE
-        image = np.full((image_size, image_size, 3), IMAGENET_MEAN, dtype=np.float32)
+    def make_frame(image):
+        frame = cv2.resize(image, (OUTPUT_IMAGE_SIZE, OUTPUT_IMAGE_SIZE), interpolation=cv2.INTER_CUBIC) / 255
+        frame = np.clip(frame, 0, 1)
+        frame = np.power(frame, GAMMA) * 255
+        return frame
 
+    image_sizes = [START_IMAGE_SIZE]
+    while True:
+        s = int(image_sizes[-1] * OCTAVE_SCALE)
+        if s > MAX_IMAGE_SIZE:
+            break
+        image_sizes.append(s)
+
+    image_size = START_IMAGE_SIZE
+    image = np.full((image_size, image_size, 3), IMAGENET_MEAN, dtype=np.float32)
+    frame_num = 0
+    for fi in range(len(song_features)):
         target_values = []
         features = song_features[fi]
         scale = int(num_features / len(features) * 4)
@@ -103,7 +116,7 @@ def make_keyframes():
             start += target_size
             target_values.append(t)
 
-        while image_size < MAX_IMAGE_SIZE:
+        for si in range(len(image_sizes)):
             # l = sess.run(layer, {X: image})
             # print(f'size {image.shape} l shape {l.shape} l range {l.min()} {l.max()}')
 
@@ -112,27 +125,49 @@ def make_keyframes():
                 for t in range(len(targets)):
                     args[targets[t]] = target_values[t]
                 g = sess.run(gradient, args)
-                image += LEARNING_RATE * g / (np.abs(g).mean() + 1e-7)
-                view_image = (image - image.min()) / (image.max() - image.min())
-                view_image = np.power(view_image, GAMMA)
-                cv2.imshow(f'result-{image_size}', view_image)
+                lr = LEARNING_RATE * (len(image_sizes) - si)
+                image += lr * g / (np.abs(g).mean() + 1e-7)
+                image = (image - image.min()) / (image.max() - image.min()) * 255
+                frame = make_frame(image)
+                cv2.imwrite(os.path.join(OUTPUT_DIR, f'f-{frame_num:05d}.png'), frame)
+                frame_num += 1
+                cv2.imshow(f'image', frame / 255)
                 cv2.waitKey(1)
-            image_size *= OCTAVE_SCALE
-            image = cv2.resize(image, (int(image_size), int(image_size)), interpolation=cv2.INTER_CUBIC)
+            if si < len(image_sizes) - 1:
+                image = cv2.resize(image, (image_sizes[si + 1], image_sizes[si + 1]), interpolation=cv2.INTER_CUBIC)
 
-        cv2.imwrite(os.path.join(OUTPUT_DIR, f'img-{fi:05d}.png'), image)
+        # Keep this frame for a while
+        for k in range(5):
+            cv2.imwrite(os.path.join(OUTPUT_DIR, f'f-{frame_num:05d}.png'), frame)
+            frame_num += 1
+
+        downscaled = image
+        for s in image_sizes[-2::-1]:
+            downscaled = cv2.resize(downscaled, (s, s), interpolation=cv2.INTER_CUBIC)
+            frame = make_frame(downscaled)
+            cv2.imwrite(os.path.join(OUTPUT_DIR, f'f-{frame_num:05d}.png'), frame)
+            frame_num += 1
+            cv2.imshow(f'image', frame / 255)
+            cv2.waitKey(100)
+
+        global fps
+        if fps is None:
+            fps = int(np.round(frame_num / MUSICNN_INPUT_LENGTH))
+
+        image = cv2.resize(image, (image_sizes[0], image_sizes[0]), interpolation=cv2.INTER_CUBIC)
+
 
 def make_movie():
     subprocess.run(
         [
             'ffmpeg', '-y',
             '-pix_fmt', 'yuv420p',
-            '-framerate', f'{1 / MUSICNN_INPUT_LENGTH}',
+            '-framerate', f'{fps}',
             '-start_number', '0',
-            '-i', 'output\img-%05d.png',
+            '-i', r'output\f-%05d.png',
             '-i', AUDIO_FILE,
             '-c:v', 'libx264',
-            '-r', '25',
+            '-r', f'{fps}',
             os.path.join(OUTPUT_DIR, os.path.splitext(os.path.basename(AUDIO_FILE))[0] + '.mp4')
         ]
     )
@@ -140,7 +175,7 @@ def make_movie():
 def run():
     shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    make_keyframes()
+    make_frames()
     make_movie()
 
 
