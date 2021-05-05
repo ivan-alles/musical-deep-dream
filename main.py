@@ -96,7 +96,7 @@ def make_frames():
     gradient = tf.gradients(loss, X)[0]
 
     def make_frame(image):
-        frame = cv2.resize(image, (OUTPUT_IMAGE_SIZE, OUTPUT_IMAGE_SIZE), interpolation=cv2.INTER_CUBIC) / 255
+        frame = cv2.resize(image, (OUTPUT_IMAGE_SIZE, OUTPUT_IMAGE_SIZE), interpolation=cv2.INTER_CUBIC)
         frame = np.clip(frame, 0, 1)
         frame = np.power(frame, GAMMA) * 255
         return frame
@@ -132,7 +132,6 @@ def make_frames():
                 g = sess.run(gradient, args)
                 lr = OCTAVE_PARAMS[oi][2]
                 image += lr * g / (np.abs(g).mean() + 1e-7)
-                image = (image - image.min()) / (image.max() - image.min()) * 255
                 frame = make_frame(image)
                 cv2.imwrite(os.path.join(OUTPUT_DIR, f'f-{frame_num:05d}.png'), frame)
                 frame_num += 1
@@ -156,6 +155,7 @@ def make_frames():
             fps = int(np.round(frame_num / MUSICNN_INPUT_LENGTH))
 
         image = cv2.resize(image, (OCTAVE_PARAMS[0][0], OCTAVE_PARAMS[0][0]), interpolation=cv2.INTER_CUBIC)
+        image = (image - image.min()) / (image.max() - image.min()) * 255
 
 
 def make_movie():
