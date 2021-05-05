@@ -120,8 +120,9 @@ def make_movie():
             '-framerate', f'{1 / MUSICNN_INPUT_LENGTH}',
             '-start_number', '0',
             '-i', 'output\img-%05d.png',
-            '-r', '25',
             '-i', AUDIO_FILE,
+            '-c:v', 'libx264',
+            '-r', '25',
             os.path.join(OUTPUT_DIR, os.path.splitext(os.path.basename(AUDIO_FILE))[0] + '.mp4')
         ]
     )
