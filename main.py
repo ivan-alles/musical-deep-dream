@@ -1,6 +1,8 @@
 import cv2
 from musicnn.extractor import extractor
 import numpy as np
+import os
+import shutil
 import tensorflow as tf
 
 # AUDIO_FILE = 'songs/pop.00000.wav'
@@ -10,7 +12,7 @@ AUDIO_FILE = 'songs/metal.00000.wav'
 MUSICNN_MODEL = 'MSD_musicnn'
 # MUSICNN_MODEL = 'MSD_vgg'
 
-MUSICNN_INPUT_LENGTH = 1
+MUSICNN_INPUT_LENGTH = 3
 
 DEEP_DREAM_MODEL = 'inception5h/tensorflow_inception_graph.pb'
 
@@ -25,8 +27,8 @@ ITERATION_COUNT = 5
 MIX_RNG_SEED = 1
 FEATURE_THRESHOLD = 0.1
 
+OUTPUT_DIR = 'output'
 
-rng = np.random.RandomState(1)
 
 
 def make_keyframes():
@@ -107,6 +109,13 @@ def make_keyframes():
             image_size *= OCTAVE_SCALE
             image = cv2.resize(image, (int(image_size), int(image_size)), interpolation=cv2.INTER_CUBIC)
 
+        cv2.imwrite(os.path.join(OUTPUT_DIR, f'img-{fi:05d}.png'), image)
+
+def run():
+    shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    make_keyframes()
+
 
 if __name__ == "__main__":
-    make_keyframes()
+    run()

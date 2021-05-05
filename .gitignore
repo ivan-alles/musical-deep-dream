@@ -2,6 +2,7 @@
 
 .temp
 songs
+output
 musicnn/musicnn
 
 __pycache__/
