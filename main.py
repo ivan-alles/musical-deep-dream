@@ -35,6 +35,8 @@ MIX_RNG_SEED = 1
 
 OUTPUT_DIR = 'output'
 
+GAMMA = 0.9
+
 configuration.SR = 64000
 configuration.N_MELS = 64
 
@@ -112,7 +114,7 @@ def make_keyframes():
                 g = sess.run(gradient, args)
                 image += LEARNING_RATE * g / (np.abs(g).mean() + 1e-7)
                 view_image = (image - image.min()) / (image.max() - image.min())
-                view_image = np.power(view_image, 1.5)
+                view_image = np.power(view_image, GAMMA)
                 cv2.imshow(f'result-{image_size}', view_image)
                 cv2.waitKey(1)
             image_size *= OCTAVE_SCALE
