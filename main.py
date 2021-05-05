@@ -1,5 +1,6 @@
 import cv2
 from musicnn.extractor import extractor
+from musicnn import configuration
 import numpy as np
 import os
 import shutil
@@ -15,6 +16,11 @@ MUSICNN_MODEL = 'MSD_musicnn'
 
 MUSICNN_INPUT_LENGTH = 0.25
 
+# Possible values: mean_pool, max_pool, penultimate, taggram
+FEATURE_NAME = 'mean_pool'
+FEATURE_THRESHOLD = 0.1
+
+
 DEEP_DREAM_MODEL = 'inception5h/tensorflow_inception_graph.pb'
 
 IMAGENET_MEAN = 117.0
@@ -26,18 +32,20 @@ MAX_IMAGE_SIZE = 300
 OCTAVE_SCALE = 1.4
 ITERATION_COUNT = 5
 MIX_RNG_SEED = 1
-FEATURE_THRESHOLD = 0.1
 
 OUTPUT_DIR = 'output'
 
+configuration.SR = 64000
+configuration.N_MELS = 64
 
 
 def make_keyframes():
-    # Features with time axis: mean_pool, max_pool, penultimate
+
     taggram, tags, feature_map = extractor(AUDIO_FILE, model=MUSICNN_MODEL, input_length=MUSICNN_INPUT_LENGTH)
     print(f'Musicnn features: {feature_map.keys()}')
+    feature_map['taggram'] = taggram
 
-    song_features = feature_map['mean_pool']
+    song_features = feature_map[FEATURE_NAME]
 
     graph = tf.Graph()
     sess = tf.InteractiveSession(graph=graph)
@@ -128,9 +136,9 @@ def make_movie():
     )
 
 def run():
-    # shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
-    # os.makedirs(OUTPUT_DIR, exist_ok=True)
-    # make_keyframes()
+    shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    make_keyframes()
     make_movie()
 
 
