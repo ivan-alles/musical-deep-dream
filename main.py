@@ -10,6 +10,8 @@ AUDIO_FILE = 'songs/metal.00000.wav'
 MUSICNN_MODEL = 'MSD_musicnn'
 # MUSICNN_MODEL = 'MSD_vgg'
 
+MUSICNN_INPUT_LENGTH = 1
+
 DEEP_DREAM_MODEL = 'inception5h/tensorflow_inception_graph.pb'
 
 IMAGENET_MEAN = 117.0
@@ -29,8 +31,8 @@ rng = np.random.RandomState(1)
 
 def make_keyframes():
     # Features with time axis: mean_pool, max_pool, penultimate
-    taggram, tags, feature_map = extractor(AUDIO_FILE, model=MUSICNN_MODEL, input_length=1)
-    print(feature_map.keys())
+    taggram, tags, feature_map = extractor(AUDIO_FILE, model=MUSICNN_MODEL, input_length=MUSICNN_INPUT_LENGTH)
+    print(f'Musicnn features: {feature_map.keys()}')
 
     song_features = feature_map['mean_pool']
 
@@ -53,7 +55,7 @@ def make_keyframes():
     for layer_name in LAYER_NAMES:
         layer = graph.get_tensor_by_name("import/%s:0" % layer_name)
         layers.append(layer)
-        num_features += layer.shape[-1]
+        num_features += int(layer.shape[-1])
         print(f'Layer {layer_name}, shape {layer.shape}')
         target = tf.placeholder(tf.float32, name="target")
         targets.append(target)
@@ -73,7 +75,10 @@ def make_keyframes():
 
         target_values = []
         features = song_features[fi]
-        features = cv2.resize(np.tile(features, (11, 1)), (num_features, 11), interpolation=cv2.INTER_LINEAR)[5]
+        scale = int(num_features / len(features) * 4)
+        scale = scale if scale % 2 else scale + 1
+        features = cv2.resize(np.tile(features, (scale, 1)), (num_features, scale),
+                              interpolation=cv2.INTER_LINEAR)[scale // 2]
         features = (features > FEATURE_THRESHOLD).astype(np.float32)
         print(f'Non-zero features {features.sum() / len(features) * 100:0.1f}%')
         np.random.RandomState(MIX_RNG_SEED).shuffle(features)
