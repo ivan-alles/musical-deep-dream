@@ -13,7 +13,7 @@ AUDIO_FILE = r'songs\metal.00000-s.wav'
 MUSICNN_MODEL = 'MSD_musicnn'
 # MUSICNN_MODEL = 'MSD_vgg'
 
-MUSICNN_INPUT_LENGTH = 1
+MUSICNN_INPUT_LENGTH = 0.25
 
 DEEP_DREAM_MODEL = 'inception5h/tensorflow_inception_graph.pb'
 
@@ -117,7 +117,7 @@ def make_movie():
         [
             'ffmpeg', '-y',
             '-pix_fmt', 'yuv420p',
-            '-framerate', '1/1',
+            '-framerate', f'{1 / MUSICNN_INPUT_LENGTH}',
             '-start_number', '0',
             '-i', 'output\img-%05d.png',
             '-r', '25',
@@ -127,9 +127,9 @@ def make_movie():
     )
 
 def run():
-    shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    make_keyframes()
+    # shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
+    # os.makedirs(OUTPUT_DIR, exist_ok=True)
+    # make_keyframes()
     make_movie()
 
 
