@@ -14,7 +14,7 @@ AUDIO_FILE = r'songs\pop.00000.wav'
 MUSICNN_MODEL = 'MSD_musicnn'
 # MUSICNN_MODEL = 'MSD_vgg'
 
-MUSICNN_INPUT_LENGTH = 1.834 * 2
+MUSICNN_INPUT_LENGTH = 1.8
 
 # Possible values: mean_pool, max_pool, penultimate, taggram
 FEATURE_NAME = 'mean_pool'
@@ -26,10 +26,23 @@ IMAGENET_MEAN = 117.0
 LAYER_NAMES = ['mixed3a', 'mixed4a', 'mixed4e', 'mixed5b']
 LAYER_WEIGHTS = [3, 4, 2, 1]
 LEARNING_RATE = 2
-START_IMAGE_SIZE = 8
 MAX_IMAGE_SIZE = 256
-OCTAVE_SCALE = 2
-ITERATION_COUNT = 5
+# (size, iterations, learning_rate)
+OCTAVE_PARAMS = [
+    (8, 2, 10),
+    (11, 2, 9),
+    (16, 2, 8),
+    (23, 2, 7),
+    (32, 3, 5),
+    (45, 3, 4),
+    (64, 3, 3),
+    (91, 4, 2),
+    (128, 6, 2),
+    (181, 8, 2),
+    (256, 10, 2),
+    (362, 16, 2)
+]
+
 MIX_RNG_SEED = 1
 OUTPUT_IMAGE_SIZE = 1024
 
@@ -88,15 +101,7 @@ def make_frames():
         frame = np.power(frame, GAMMA) * 255
         return frame
 
-    image_sizes = [START_IMAGE_SIZE]
-    while True:
-        s = int(image_sizes[-1] * OCTAVE_SCALE)
-        if s > MAX_IMAGE_SIZE:
-            break
-        image_sizes.append(s)
-
-    image_size = START_IMAGE_SIZE
-    image = np.full((image_size, image_size, 3), IMAGENET_MEAN, dtype=np.float32)
+    image = np.full((OCTAVE_PARAMS[0][0], OCTAVE_PARAMS[0][0], 3), IMAGENET_MEAN, dtype=np.float32)
     frame_num = 0
     for fi in range(len(song_features)):
         target_values = []
@@ -116,16 +121,16 @@ def make_frames():
             start += target_size
             target_values.append(t)
 
-        for si in range(len(image_sizes)):
+        for oi in range(len(OCTAVE_PARAMS)):
             # l = sess.run(layer, {X: image})
             # print(f'size {image.shape} l shape {l.shape} l range {l.min()} {l.max()}')
 
-            for batch in range(ITERATION_COUNT):
+            for batch in range(OCTAVE_PARAMS[oi][1]):
                 args = {X: image}
                 for t in range(len(targets)):
                     args[targets[t]] = target_values[t]
                 g = sess.run(gradient, args)
-                lr = LEARNING_RATE * (len(image_sizes) - si)
+                lr = OCTAVE_PARAMS[oi][2]
                 image += lr * g / (np.abs(g).mean() + 1e-7)
                 image = (image - image.min()) / (image.max() - image.min()) * 255
                 frame = make_frame(image)
@@ -133,16 +138,12 @@ def make_frames():
                 frame_num += 1
                 cv2.imshow(f'image', frame / 255)
                 cv2.waitKey(1)
-            if si < len(image_sizes) - 1:
-                image = cv2.resize(image, (image_sizes[si + 1], image_sizes[si + 1]), interpolation=cv2.INTER_CUBIC)
-
-        # Keep this frame for a while
-        for k in range(5):
-            cv2.imwrite(os.path.join(OUTPUT_DIR, f'f-{frame_num:05d}.png'), frame)
-            frame_num += 1
+            if oi < len(OCTAVE_PARAMS) - 1:
+                image = cv2.resize(image, (OCTAVE_PARAMS[oi + 1][0], OCTAVE_PARAMS[oi + 1][0]), interpolation=cv2.INTER_CUBIC)
 
         downscaled = image
-        for s in image_sizes[-2::-1]:
+        for oi in range(len(OCTAVE_PARAMS) - 2, -1, -1):
+            s = OCTAVE_PARAMS[oi][0]
             downscaled = cv2.resize(downscaled, (s, s), interpolation=cv2.INTER_CUBIC)
             frame = make_frame(downscaled)
             cv2.imwrite(os.path.join(OUTPUT_DIR, f'f-{frame_num:05d}.png'), frame)
@@ -154,7 +155,7 @@ def make_frames():
         if fps is None:
             fps = int(np.round(frame_num / MUSICNN_INPUT_LENGTH))
 
-        image = cv2.resize(image, (image_sizes[0], image_sizes[0]), interpolation=cv2.INTER_CUBIC)
+        image = cv2.resize(image, (OCTAVE_PARAMS[0][0], OCTAVE_PARAMS[0][0]), interpolation=cv2.INTER_CUBIC)
 
 
 def make_movie():
