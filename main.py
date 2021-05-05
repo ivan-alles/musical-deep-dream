@@ -3,16 +3,17 @@ from musicnn.extractor import extractor
 import numpy as np
 import os
 import shutil
+import subprocess
 import tensorflow as tf
 
-# AUDIO_FILE = 'songs/pop.00000.wav'
-AUDIO_FILE = 'songs/metal.00000.wav'
-# AUDIO_FILE = 'songs/classical.00012.wav'
+# AUDIO_FILE = r'songs\pop.00000.wav'
+AUDIO_FILE = r'songs\metal.00000-s.wav'
+# AUDIO_FILE = r'songs\classical.00012.wav'
 
 MUSICNN_MODEL = 'MSD_musicnn'
 # MUSICNN_MODEL = 'MSD_vgg'
 
-MUSICNN_INPUT_LENGTH = 3
+MUSICNN_INPUT_LENGTH = 1
 
 DEEP_DREAM_MODEL = 'inception5h/tensorflow_inception_graph.pb'
 
@@ -111,10 +112,25 @@ def make_keyframes():
 
         cv2.imwrite(os.path.join(OUTPUT_DIR, f'img-{fi:05d}.png'), image)
 
+def make_movie():
+    subprocess.run(
+        [
+            'ffmpeg', '-y',
+            '-pix_fmt', 'yuv420p',
+            '-framerate', '1/1',
+            '-start_number', '0',
+            '-i', 'output\img-%05d.png',
+            '-r', '25',
+            '-i', AUDIO_FILE,
+            os.path.join(OUTPUT_DIR, os.path.splitext(os.path.basename(AUDIO_FILE))[0] + '.mp4')
+        ]
+    )
+
 def run():
     shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     make_keyframes()
+    make_movie()
 
 
 if __name__ == "__main__":
