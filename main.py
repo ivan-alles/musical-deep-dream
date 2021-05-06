@@ -5,32 +5,29 @@ import numpy as np
 import os
 import shutil
 import subprocess
+import sys
 import tensorflow as tf
 
-AUDIO_FILE = r'songs\pop.00000.wav'
-# AUDIO_FILE = r'songs\metal.00000.wav'
-# AUDIO_FILE = r'songs\classical.00012.wav'
 
 MUSICNN_MODEL = 'MSD_musicnn'
 # MUSICNN_MODEL = 'MSD_vgg'
 
-MUSICNN_INPUT_LENGTH = 1.8
+MUSICNN_INPUT_LENGTH = 1.843 / 2
 
 # Possible values: mean_pool, max_pool, penultimate, taggram
-FEATURE_NAME = 'mean_pool'
-FEATURE_THRESHOLD = 0.1
+FEATURE_NAME = 'max_pool'
+FEATURE_THRESHOLD = 1.5
 
 DEEP_DREAM_MODEL = 'inception5h/tensorflow_inception_graph.pb'
 
-IMAGENET_MEAN = 117.0
 LAYER_NAMES = ['mixed3a', 'mixed4a', 'mixed4e', 'mixed5b']
-LAYER_WEIGHTS = [3, 4, 2, 1]
-LEARNING_RATE = 2
-MAX_IMAGE_SIZE = 256
+LAYER_WEIGHTS = [2, 0.7, 0.5, 0.4]
+MIX_RNG_SEED = 1
+
 # (size, iterations, learning_rate)
 OCTAVE_PARAMS = [
-    (8, 2, 10),
-    (11, 2, 9),
+    (8, 3, 10),
+    (11, 3, 9),
     (16, 2, 8),
     (23, 2, 7),
     (32, 3, 5),
@@ -39,24 +36,31 @@ OCTAVE_PARAMS = [
     (91, 4, 2),
     (128, 6, 2),
     (181, 8, 2),
-    (256, 10, 2),
-    (362, 16, 2)
+    (256, 8, 2),
+    (362, 12, 2),
+    (512, 16, 2),
 ]
 
-MIX_RNG_SEED = 1
 OUTPUT_IMAGE_SIZE = 1024
 
 OUTPUT_DIR = 'output'
+TEMP_DIR = '.temp'
 
 GAMMA = 0.9
 
 configuration.SR = 64000
 configuration.N_MELS = 64
 
+# This is a constant, not a configurable parameter.
+IMAGENET_MEAN = 117.0
+
+mix_rng = np.random.RandomState(MIX_RNG_SEED)
+
+
 fps = None
 
-def make_frames():
-    taggram, tags, feature_map = extractor(AUDIO_FILE, model=MUSICNN_MODEL, input_length=MUSICNN_INPUT_LENGTH)
+def make_frames(audio_file):
+    taggram, tags, feature_map = extractor(audio_file, model=MUSICNN_MODEL, input_length=MUSICNN_INPUT_LENGTH)
     print(f'Musicnn features: {feature_map.keys()}')
     feature_map['taggram'] = taggram
 
@@ -96,7 +100,7 @@ def make_frames():
     gradient = tf.gradients(loss, X)[0]
 
     def make_frame(image):
-        frame = cv2.resize(image, (OUTPUT_IMAGE_SIZE, OUTPUT_IMAGE_SIZE), interpolation=cv2.INTER_CUBIC)
+        frame = cv2.resize(image, (OUTPUT_IMAGE_SIZE, OUTPUT_IMAGE_SIZE), interpolation=cv2.INTER_CUBIC) / 255
         frame = np.clip(frame, 0, 1)
         frame = np.power(frame, GAMMA) * 255
         return frame
@@ -112,7 +116,7 @@ def make_frames():
                               interpolation=cv2.INTER_LINEAR)[scale // 2]
         features = (features > FEATURE_THRESHOLD).astype(np.float32)
         print(f'Non-zero features {features.sum() / len(features) * 100:0.1f}%')
-        np.random.RandomState(MIX_RNG_SEED).shuffle(features)
+        mix_rng.shuffle(features)
         start = 0
         for l in range(len(layers)):
             layer = layers[l]
@@ -133,7 +137,7 @@ def make_frames():
                 lr = OCTAVE_PARAMS[oi][2]
                 image += lr * g / (np.abs(g).mean() + 1e-7)
                 frame = make_frame(image)
-                cv2.imwrite(os.path.join(OUTPUT_DIR, f'f-{frame_num:05d}.png'), frame)
+                cv2.imwrite(os.path.join(TEMP_DIR, f'f-{frame_num:05d}.png'), frame)
                 frame_num += 1
                 cv2.imshow(f'image', frame / 255)
                 cv2.waitKey(1)
@@ -145,7 +149,7 @@ def make_frames():
             s = OCTAVE_PARAMS[oi][0]
             downscaled = cv2.resize(downscaled, (s, s), interpolation=cv2.INTER_CUBIC)
             frame = make_frame(downscaled)
-            cv2.imwrite(os.path.join(OUTPUT_DIR, f'f-{frame_num:05d}.png'), frame)
+            cv2.imwrite(os.path.join(TEMP_DIR, f'f-{frame_num:05d}.png'), frame)
             frame_num += 1
             cv2.imshow(f'image', frame / 255)
             cv2.waitKey(100)
@@ -158,27 +162,32 @@ def make_frames():
         image = (image - image.min()) / (image.max() - image.min()) * 255
 
 
-def make_movie():
+def make_movie(audio_file):
+    for i in range(1000):
+        filename = os.path.join(OUTPUT_DIR, os.path.splitext(os.path.basename(audio_file))[0] + f'-{i:003d}.mp4')
+        if not os.path.exists(filename):
+            break
     subprocess.run(
         [
             'ffmpeg', '-y',
             '-pix_fmt', 'yuv420p',
             '-framerate', f'{fps}',
             '-start_number', '0',
-            '-i', r'output\f-%05d.png',
-            '-i', AUDIO_FILE,
+            '-i', fr'{TEMP_DIR}\f-%05d.png',
+            '-i', audio_file,
             '-c:v', 'libx264',
             '-r', f'{fps}',
-            os.path.join(OUTPUT_DIR, os.path.splitext(os.path.basename(AUDIO_FILE))[0] + '.mp4')
+            filename
         ]
     )
 
-def run():
-    shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
+def run(audio_file):
+    shutil.rmtree(TEMP_DIR, ignore_errors=True)
+    os.makedirs(TEMP_DIR, exist_ok=True)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    make_frames()
-    make_movie()
+    make_frames(audio_file)
+    make_movie(audio_file)
 
 
 if __name__ == "__main__":
-    run()
+    run(sys.argv[1])
