@@ -22,5 +22,12 @@ Tweak the parameters in `main.py` and run:
 
 `python main.py SONG.wav`
 
+## Credits
+
+[Musicnn](https://github.com/jordipons/musicnn) is used to exctact features from audio.
+
+Inception v1 by Google is the deep dream model.
+ 
+
 
   
