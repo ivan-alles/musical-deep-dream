@@ -1,6 +1,7 @@
 # Byte-compiled / optimized / DLL files
 
 .temp
+video
 songs
 output
 musicnn/musicnn
