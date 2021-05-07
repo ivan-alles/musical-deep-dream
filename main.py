@@ -1,6 +1,4 @@
 import cv2
-from musicnn.extractor import extractor
-from musicnn import configuration
 import numpy as np
 import os
 import shutil
@@ -8,11 +6,16 @@ import subprocess
 import sys
 import tensorflow as tf
 
+sys.path.append('musicnn')
+from musicnn.extractor import extractor
+from musicnn import configuration
+
 
 MUSICNN_MODEL = 'MSD_musicnn'
 # MUSICNN_MODEL = 'MSD_vgg'
 
-MUSICNN_INPUT_LENGTH = 1.843 / 2
+# This shall be synchronized with the beats.
+MUSICNN_INPUT_LENGTH = 2.416
 
 # Possible values: mean_pool, max_pool, penultimate, taggram
 FEATURE_NAME = 'max_pool'
